@@ -1,6 +1,8 @@
 
 #### 1  mac 启动mongodb服务 
 brew services start mongodb-community
+##### 停止mongodb服务
+brew services stop mongodb-community
 
 查看服务启动在哪个端口  一般默认是27017
 lsof -iTCP -sTCP:LISTEN | grep mongod
@@ -44,7 +46,9 @@ const Schema = mongoose.Schema;
 const stuSchema = new Schema({ name:{type:'String',unique:true}})
 // 创建模型  
 const stuModel = mongoose.model('student', stuSchema)
-           
+//  创建实例
+ const student1 = new stuModel({ name: 'student1' });
+
 ``` 
 **文档校验**
 
@@ -54,6 +58,89 @@ const stuModel = mongoose.model('student', stuSchema)
 【match】：正则匹配           new Schema({age:{type:'Number',match:/01/}})
 【enum】：枚举匹配            new Schema({sex:{type:'String',enum:[’男‘，’女‘]}})
 【validate】：自定义匹配      new Schema({sex:{type:'String',validate:valfn}})    //valfn必须返回true |false
+
+#### methods和statics、query、virtuals
+```js
+const kittySchma = new mongoose.Schema({name: String, type: String}, {
+  // 添加方法1 通过实例.方法名（）调用
+
+  methods: {  //是添加到文档的实例方法
+    speak() {
+      console.log('miao~~');
+    }
+  },
+  statics: {  //是添加到模型的静态方法
+    staticFn() {
+      console.log('staticFn~~~');
+    }
+  }，
+  query: { //在查询上添加方法。
+    byName(name) {
+      return this.where({name: new RegExp(name, 'i')});  //i 表示不区分大小写
+    }
+  }，
+   virtuals: {  //主要用途是创建计算属性。
+    fullname: {
+      get() {
+        return 'full' + this.name;
+      }, 
+      set(newname) {
+        return this.name = newname
+      }
+    }
+  }
+})
+
+// 2创建模型
+const KittyModel = mongoose.model('kittenModel', kittySchma)
+// 3创建实例
+const kitty = new KittyModel({name: 'tom'})
+
+kitty.speak()           //用实例调用
+KittyModel.staticFn()   //用model调用
+
+//在查询上调用方法
+KittyModel.find().byName('tom').then((res) => {
+  console.log('res: ', res);
+})
+
+kitty.fullname = 'abc'
+console.log(kitty.fullname);
+
+```
+
+methods是添加到文档的实例方法，这意味着你可以在一个特定的文档实例上调用这些方法
+statics是添加到模型的静态方法，这意味着你可以在模型上，而不是在文档实例上调用这些方法
+query是添加到查询（Query）的自定义方法，这意味着你可以在一个查询上调用这些方法
+virtuals不会被保存到MongoDB数据库中，但可以用于计算和设置模型的其他属性。
+
+#### alias 别名
+```js
+const childSchema = new Schema({
+  n: {
+    type: String,
+    alias: 'name'    //n的别名是name
+  }
+}, { _id: false });
+
+const parentSchema = new Schema({
+  c: childSchema,
+  name: {
+    f: {
+      type: String,
+      alias: 'name.first'   //如果是嵌套结构  那么alias得写成：父级.别名
+    }
+  }
+});
+
+```
+
+#### options
+
+```JS
+new Schema({ /* ... */ }, options);
+
+```
 
 #### 操作符
 可以在查询条件中使用
@@ -159,6 +246,31 @@ stuModel.findById('5f8d04f7c8aabc3a048b4567').then(doc => {
 map-reduce function 
 单一目的的聚合方法
 
+##### 聚合管道
+**一些常用的聚合管道(Aggregation Pipeline)**
+>> \$match：过滤数据，只输出符合条件的文档。
+>> \$group：将数据按指定的字段分组，然后进行某种统计，如求和、平均、计数等。
+>> \$sort：将数据排序。
+>> \$limit：限制聚合管道返回的文档数。
+>> \$lookup：实现左连接，可以将其他集合的文档合并到当前的文档中。
+
+```js
+stuModel.aggregate([
+  //匹配年龄大于18的
+  {$match: {age: {$gt: 18}}},  
+  //按照name字段来分组  total: {$sum: 1} 计算累加值  和js中total+=1 意思相同
+  {$group: {_id: '$name', total: {$sum: 1}}}, 
+   //按照降序排序  -1 降序  1升序
+  {$sort: {total: -1}}   
+]) 
+.then(res => {
+    console.log('聚合结果:', res);  
+    //res : [ { _id: 'Tom', total: 1 }, { _id: 'July', total: 1 } ]
+  })
+
+```
+
+##### map-reduce function 
 
 
 
